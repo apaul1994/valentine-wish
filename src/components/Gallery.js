@@ -39,22 +39,32 @@ function preloadImage(src) {
 
 // Tries a manifest first, otherwise probes common filenames
 async function discoverPublicPhotos() {
-  // try manifest
-  try {
-    const res = await fetch('/photos/manifest.json');
-    if (res.ok) {
-      const list = await res.json();
-      if (Array.isArray(list) && list.length) {
-        const urls = list.map(f => `/photos/${f}`);
-        // preload and filter
-        const settled = await Promise.allSettled(urls.map(preloadImage));
-        const found = settled.filter(s => s.status === 'fulfilled').map(s => s.value);
-        const failed = settled.filter(s => s.status === 'rejected').map(s => s.reason || 'unknown');
-        return { found, tried: urls, failed };
+  // Use PUBLIC_URL as the base so this works when app is served from a subpath
+  const rawBase = (process.env.PUBLIC_URL || '').toString();
+  const base = rawBase.replace(/\/$/, ''); // remove trailing slash if any
+
+  // try manifest using both PUBLIC_URL and root (''), in case app is served at root or a subpath
+  const basesToTry = Array.from(new Set([base, '']));
+  for (const b of basesToTry) {
+    try {
+      const manifestUrl = `${b}/photos/manifest.json`.replace(/\/\//g, '/');
+      // record manifest attempt in diagnostics via a temporary variable (will return it if needed)
+      // eslint-disable-next-line no-await-in-loop
+      const res = await fetch(manifestUrl);
+      if (res.ok) {
+        const list = await res.json();
+        if (Array.isArray(list) && list.length) {
+          const urls = list.map(f => `${b}/photos/${f}`.replace(/\/\//g, '/'));
+          // preload and filter
+          const settled = await Promise.allSettled(urls.map(preloadImage));
+          const found = settled.filter(s => s.status === 'fulfilled').map(s => s.value);
+          const failed = settled.filter(s => s.status === 'rejected').map(s => s.reason || 'unknown');
+          return { found, tried: urls, failed, manifestTried: basesToTry.map(x => `${x}/photos/manifest.json`.replace(/\/\//g, '/')) };
+        }
       }
+    } catch (e) {
+      // ignore and continue to next base
     }
-  } catch (e) {
-    // ignore
   }
 
   // probe common names (photo1..10, img1..10, 1..10)
@@ -70,11 +80,16 @@ async function discoverPublicPhotos() {
     for (const e of exts) candidates.push(`/photos/${i}.${e}`);
   }
 
+  // prepend base to candidates so probing works when app is hosted on a subpath
+  const rawBase2 = (process.env.PUBLIC_URL || '').toString();
+  const base2 = rawBase2.replace(/\/$/, '');
+  const probed = candidates.map(c => `${base2}${c}`);
+
   const results = [];
   const failed = [];
   const tried = [];
   // try to preload candidates but stop once we have a reasonable number
-  for (const c of candidates) {
+  for (const c of probed) {
     tried.push(c);
     try {
       // eslint-disable-next-line no-await-in-loop
@@ -106,9 +121,9 @@ export default function Gallery() {
         if (result && result.length) {
           setImages(result);
           setIndex(0);
-          setDiagnostics({ tried: [], failed: [], found: result });
+          setDiagnostics({ tried: [], failed: [], found: result, manifestTried: [] });
         } else {
-          setDiagnostics({ tried: [], failed: [], found: [] });
+          setDiagnostics({ tried: [], failed: [], found: [], manifestTried: [] });
         }
       } else if (result && typeof result === 'object') {
         const { found, tried, failed } = result;
@@ -116,7 +131,7 @@ export default function Gallery() {
           setImages(found);
           setIndex(0);
         }
-        setDiagnostics({ tried: tried || [], failed: failed || [], found: found || [] });
+        setDiagnostics({ tried: tried || [], failed: failed || [], found: found || [], manifestTried: result.manifestTried || [] });
       }
       setLoading(false);
     });
@@ -173,6 +188,12 @@ export default function Gallery() {
             <div className="mt-4 text-xs text-left text-gray-600 bg-white/5 p-3 rounded">
               <div><strong>No photos found in <code>/public/photos</code>.</strong></div>
               <div className="mt-2">What I tried:</div>
+              {diagnostics.manifestTried && diagnostics.manifestTried.length > 0 && (
+                <div className="mt-1"><strong>Manifest URLs tried:</strong></div>
+              )}
+              <ul className="list-disc list-inside text-xs">
+                {diagnostics.manifestTried && diagnostics.manifestTried.slice(0, 8).map((u, i) => <li key={`m-${i}`}>{u}</li>)}
+              </ul>
               <div className="mt-1"><strong>Tried URLs:</strong></div>
               <ul className="list-disc list-inside text-xs">
                 {diagnostics.tried.slice(0, 8).map((u, i) => <li key={`t-${i}`}>{u}</li>)}
