@@ -25,7 +25,8 @@
     "deploy": "gh-pages -d build",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "validate-photos": "node scripts/validate-photos.js"
   },
   "eslintConfig": {
     "extends": [
