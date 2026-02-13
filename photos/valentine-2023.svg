@@ -1,0 +1,11 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='800'>
+  <defs>
+    <linearGradient id='g' x1='0' x2='1'>
+      <stop offset='0' stop-color='#ffe6f0' />
+      <stop offset='1' stop-color='#ff6b96' />
+    </linearGradient>
+  </defs>
+  <rect width='100%' height='100%' fill='url(#g)' rx='20' ry='20' />
+  <text x='60' y='380' font-size='72' fill='#fff' font-family='Dancing Script, serif'>First Valentine</text>
+  <text x='60' y='460' font-size='28' fill='rgba(255,255,255,0.95)'>14 Feb 2023</text>
+</svg>
